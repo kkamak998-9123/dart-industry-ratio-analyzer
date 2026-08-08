@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DART 업종별 재무비율 분석</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap">
+
+  <header class="top">
+    <div>
+      <p class="brand-eyebrow">DART OPEN API</p>
+      <h1>업종별 재무비율 분석</h1>
+      <p class="sub">회사를 검색하면 업종을 자동 판별하고, 계정과목을 드래그해서 재무비율을 계산합니다.</p>
+    </div>
+  </header>
+
+  <section class="panel search-panel">
+    <div class="panel-head">
+      <span class="panel-title">회사 검색</span>
+    </div>
+    <div class="search-body">
+      <form id="searchForm" autocomplete="off">
+        <input id="searchInput" class="search-box wide" type="text" placeholder="회사명을 입력하세요 (예: 삼성전자)">
+        <button type="submit" class="btn-primary">검색</button>
+      </form>
+      <div id="searchResults" class="search-results"></div>
+    </div>
+  </section>
+
+  <div id="statusBar" class="status-bar" hidden></div>
+
+  <section id="companyPanel" class="company-panel" hidden>
+
+    <section class="panel company-head">
+      <div class="company-title">
+        <h2 id="companyName">-</h2>
+        <span id="industryBadge" class="badge industry-badge">-</span>
+      </div>
+    </section>
+
+    <div class="tab-bar main-tabs">
+      <button type="button" class="tab-btn active" data-tab="indicator">원본 지표 그래프</button>
+      <button type="button" class="tab-btn" data-tab="ratio">업종 추천 비율 분석</button>
+    </div>
+
+    <section id="indicatorTab" class="tab-content">
+      <div class="panel">
+        <div class="panel-head">
+          <span class="panel-title">재무제표 선택</span>
+          <div class="tab-bar sub-tabs">
+            <button type="button" class="sub-tab-btn active" data-stmt="is">손익계산서</button>
+            <button type="button" class="sub-tab-btn" data-stmt="bs">재무상태표</button>
+            <button type="button" class="sub-tab-btn" data-stmt="cf">현금흐름표</button>
+          </div>
+        </div>
+        <div class="panel-body">
+          <p class="hint">지표를 클릭해서 선택하세요 (여러 개 선택 가능).</p>
+          <div id="itemChips" class="chip-list"></div>
+          <button id="drawIndicatorBtn" type="button" class="btn-primary" disabled>그래프 그리기</button>
+        </div>
+      </div>
+      <div id="indicatorChartPanel" class="panel chart-panel" hidden>
+        <div class="panel-head"><span class="panel-title">지표 추이</span></div>
+        <div id="indicatorChart" class="chart-body"></div>
+      </div>
+    </section>
+
+    <section id="ratioTab" class="tab-content" hidden>
+      <div class="ratio-grid">
+        <div class="panel">
+          <div class="panel-head"><span class="panel-title">업종 추천 재무비율 — 계정을 끌어다 놓으세요</span></div>
+          <div id="ratioCards" class="panel-body ratio-cards"></div>
+          <div class="panel-body ratio-actions">
+            <button id="computeRatiosBtn" type="button" class="btn-primary" disabled>비율 계산하기</button>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><span class="panel-title">계정과목 (드래그)</span></div>
+          <div class="panel-body">
+            <div class="pool-group">
+              <h4>재무상태표 (BS)</h4>
+              <div id="poolBs" class="chip-list pool"></div>
+            </div>
+            <div class="pool-group">
+              <h4>손익계산서 (IS)</h4>
+              <div id="poolIs" class="chip-list pool"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div id="ratioChartPanel" class="panel chart-panel" hidden>
+        <div class="panel-head"><span class="panel-title">비율 추이</span></div>
+        <div id="ratioChart" class="chart-body"></div>
+        <div id="ratioTable" class="panel-body"></div>
+      </div>
+    </section>
+
+  </section>
+
+</div>
+<script src="app.js"></script>
+</body>
+</html>
