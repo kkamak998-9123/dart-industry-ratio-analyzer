@@ -45,8 +45,11 @@ def 회사_by_code(corp_code: str):
     return 목록.find_by_corp_code(corp_code)
 
 
-def 재무제표추출(회사, bgn_de="20210101", end_de="20261231"):
-    return dart.fs.extract(corp_code=회사.corp_code, bgn_de=bgn_de, end_de=end_de)
+def 재무제표추출(corp_code: str, bgn_de="20230101", end_de="20261231"):
+    """dataset='web': XBRL(arelle) 대신 DART 재무제표 뷰어에서 추출해 메모리 절감.
+    bgn_de='20230101'로 최근 연간보고서만 가져와 약 5개년을 확보한다.
+    corp_list가 없어도 corp_code 문자열만으로 동작한다."""
+    return dart.fs.extract(corp_code=corp_code, bgn_de=bgn_de, end_de=end_de, dataset="web")
 
 
 def _통합조회(재무제표, keys, 에러메시지):
@@ -83,14 +86,15 @@ def _연도별_컬럼(df: pd.DataFrame) -> dict:
     return 연도별
 
 
-def 통계_페이로드(df: pd.DataFrame) -> dict:
+def 통계_페이로드(df: pd.DataFrame, max_years: int = 5) -> dict:
     """가공된 재무제표 df를 프론트엔드가 바로 쓸 수 있는 JSON 구조로 변환.
 
     {"years": ["2021", ...], "items": [{"label": "매출액", "values": {"2021": 1000.0}}]}
+    max_years: 최근 N개년만 유지(기본 5). 종목에 따라 6개년이 잡혀도 5개년으로 절삭.
     """
     label_col = df.columns[0]
     연도별컬럼 = _연도별_컬럼(df)
-    정렬된연도 = sorted(연도별컬럼)
+    정렬된연도 = sorted(연도별컬럼)[-max_years:]
 
     items = []
     for _, row in df.iterrows():
