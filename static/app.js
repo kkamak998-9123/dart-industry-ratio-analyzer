@@ -69,17 +69,33 @@
 
   // ---------------- 회사 데이터 로드 ----------------
 
+  const POLL_INTERVAL_MS = 4000;
+  const POLL_TIMEOUT_MS = 4 * 60 * 1000;
+
+  function sleep(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
   async function loadCompany(code) {
     $("searchResults").innerHTML = "";
     $("companyPanel").hidden = true;
     setStatus("재무제표를 불러오는 중입니다... DART 최초 조회는 1~3분 정도 걸릴 수 있어요.");
+    const deadline = Date.now() + POLL_TIMEOUT_MS;
     try {
-      const res = await fetch(`/api/company/${encodeURIComponent(code)}`);
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.detail || `HTTP ${res.status}`);
+      while (true) {
+        const res = await fetch(`/api/company/${encodeURIComponent(code)}`);
+        if (res.status === 202) {
+          if (Date.now() > deadline) throw new Error("시간 초과 (분석이 너무 오래 걸립니다)");
+          await sleep(POLL_INTERVAL_MS);
+          continue;
+        }
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.detail || `HTTP ${res.status}`);
+        }
+        currentData = await res.json();
+        break;
       }
-      currentData = await res.json();
       clearStatus();
       renderCompany();
     } catch (err) {
