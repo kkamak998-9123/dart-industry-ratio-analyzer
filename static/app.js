@@ -7,6 +7,9 @@
   let selectedStmt = "is";
   let selectedItems = { is: new Set(), bs: new Set(), cf: new Set() };
   let ratioMapping = {};
+  let customIndicators = []; // 사용자가 만든 지표: {id, label, values}
+  let selectedCustomIds = new Set();
+  let customZones = { a: [], b: [] }; // 지표 빌더에 드래그된 항목: {label, source, values}
 
   const $ = (id) => document.getElementById(id);
 
@@ -178,12 +181,24 @@
 
     selectedItems = { is: new Set(), bs: new Set(), cf: new Set() };
     ratioMapping = {};
+    customIndicators = [];
+    selectedCustomIds = new Set();
+    customZones = { a: [], b: [] };
 
     selectedStmt = "is";
     document.querySelectorAll(".sub-tab-btn").forEach((b) => b.classList.toggle("active", b.dataset.stmt === "is"));
     renderItemChips();
     $("indicatorChartPanel").hidden = true;
-    $("drawIndicatorBtn").disabled = true;
+    updateDrawButtonState();
+
+    renderCustomAccountPool();
+    renderCustomZoneChips("a");
+    renderCustomZoneChips("b");
+    renderCustomMetricChips();
+    $("customMetricName").value = "";
+    $("customOpToggle").dataset.op = "+";
+    $("customOpToggle").textContent = "+";
+    updateAddCustomMetricButton();
 
     renderRatioCards();
     renderAccountPool();
@@ -209,6 +224,7 @@
       btn.classList.add("active");
       selectedStmt = btn.dataset.stmt;
       renderItemChips();
+      updateDrawButtonState();
     });
   });
 
@@ -231,7 +247,7 @@
         if (selectedItems[selectedStmt].has(item.label)) selectedItems[selectedStmt].delete(item.label);
         else selectedItems[selectedStmt].add(item.label);
         chip.classList.toggle("selected");
-        $("drawIndicatorBtn").disabled = selectedItems[selectedStmt].size === 0;
+        updateDrawButtonState();
       };
       chip.addEventListener("click", toggle);
       chip.addEventListener("keydown", (e) => {
@@ -239,6 +255,10 @@
       });
       box.appendChild(chip);
     });
+  }
+
+  function updateDrawButtonState() {
+    $("drawIndicatorBtn").disabled = selectedItems[selectedStmt].size === 0 && selectedCustomIds.size === 0;
   }
 
   $("drawIndicatorBtn").addEventListener("click", () => {
@@ -249,9 +269,179 @@
       .filter(Boolean)
       .map((item) => ({ label: item.label, values: item.values }));
 
+    customIndicators
+      .filter((c) => selectedCustomIds.has(c.id))
+      .forEach((c) => series.push({ label: c.label, values: c.values }));
+
+    const yearsSet = new Set(stmt.years || []);
+    series.forEach((s) => Object.keys(s.values).forEach((y) => yearsSet.add(y)));
+    const years = [...yearsSet].sort();
+
     $("indicatorChartPanel").hidden = false;
-    renderIndicatorChart(series, stmt.years);
+    renderIndicatorChart(series, years);
   });
+
+  // ---------------- 나만의 지표 (계정 합산, 드래그앤드롭) ----------------
+
+  function renderCustomAccountPool() {
+    const box = $("customAccountPool");
+    box.innerHTML = "";
+    const sources = [["is", "손익"], ["bs", "재무상태"], ["cf", "현금흐름"]];
+    let any = false;
+    sources.forEach(([key, tag]) => {
+      const stmt = currentData.statements[key];
+      if (!stmt || !stmt.items.length) return;
+      any = true;
+      stmt.items.forEach((item) => {
+        const chip = document.createElement("div");
+        chip.className = "chip draggable-chip";
+        chip.textContent = `${item.label} (${tag})`;
+        chip.draggable = true;
+        chip.addEventListener("dragstart", (e) => {
+          chip.classList.add("dragging");
+          e.dataTransfer.setData("text/plain", JSON.stringify({ label: item.label, source: tag, values: item.values }));
+        });
+        chip.addEventListener("dragend", () => chip.classList.remove("dragging"));
+        box.appendChild(chip);
+      });
+    });
+    if (!any) box.innerHTML = '<p class="hint">데이터가 없습니다.</p>';
+  }
+
+  function renderCustomZoneChips(side) {
+    const zoneEl = $(side === "a" ? "customZoneA" : "customZoneB");
+    const box = zoneEl.querySelector(".dz-chips");
+    box.innerHTML = "";
+    customZones[side].forEach((item, idx) => {
+      const chip = document.createElement("span");
+      chip.className = "dz-chip";
+      chip.innerHTML = `<span>${escapeHtml(item.label)}</span><button type="button" aria-label="제거">×</button>`;
+      chip.querySelector("button").addEventListener("click", () => {
+        customZones[side].splice(idx, 1);
+        renderCustomZoneChips(side);
+        updateAddCustomMetricButton();
+      });
+      box.appendChild(chip);
+    });
+  }
+
+  function updateAddCustomMetricButton() {
+    const hasName = $("customMetricName").value.trim().length > 0;
+    const hasItems = customZones.a.length > 0 || customZones.b.length > 0;
+    $("addCustomMetricBtn").disabled = !(hasName && hasItems);
+  }
+
+  $("customMetricName").addEventListener("input", updateAddCustomMetricButton);
+
+  ["customZoneA", "customZoneB"].forEach((id) => {
+    const zone = $(id);
+    const side = zone.dataset.side;
+    zone.addEventListener("dragover", (e) => { e.preventDefault(); zone.classList.add("dragover"); });
+    zone.addEventListener("dragleave", () => zone.classList.remove("dragover"));
+    zone.addEventListener("drop", (e) => {
+      e.preventDefault();
+      zone.classList.remove("dragover");
+      let data;
+      try {
+        data = JSON.parse(e.dataTransfer.getData("text/plain"));
+      } catch {
+        return;
+      }
+      if (!data || !data.label || !data.values) return;
+      const dup = customZones[side].some((it) => it.label === data.label && it.source === data.source);
+      if (!dup) {
+        customZones[side].push(data);
+        renderCustomZoneChips(side);
+        updateAddCustomMetricButton();
+      }
+    });
+  });
+
+  $("customOpToggle").addEventListener("click", () => {
+    const btn = $("customOpToggle");
+    const next = btn.dataset.op === "+" ? "-" : "+";
+    btn.dataset.op = next;
+    btn.textContent = next;
+  });
+
+  $("addCustomMetricBtn").addEventListener("click", () => {
+    const name = $("customMetricName").value.trim();
+    if (!name) return;
+    const op = $("customOpToggle").dataset.op === "-" ? -1 : 1;
+
+    const yearsSet = new Set();
+    [...customZones.a, ...customZones.b].forEach((item) => Object.keys(item.values).forEach((y) => yearsSet.add(y)));
+
+    const values = {};
+    [...yearsSet].forEach((year) => {
+      let ok = true;
+      let sumA = 0;
+      customZones.a.forEach((item) => {
+        const v = item.values[year];
+        if (v === undefined) { ok = false; return; }
+        sumA += v;
+      });
+      let sumB = 0;
+      customZones.b.forEach((item) => {
+        const v = item.values[year];
+        if (v === undefined) { ok = false; return; }
+        sumB += v;
+      });
+      if (ok) values[year] = sumA + op * sumB;
+    });
+
+    if (!Object.keys(values).length) {
+      setStatus("계산 가능한 연도가 없습니다. 선택한 항목들의 연도가 겹치는지 확인해주세요.", true);
+      return;
+    }
+
+    const id = `custom-${Date.now()}`;
+    customIndicators.push({ id, label: name, values });
+    selectedCustomIds.add(id);
+
+    $("customMetricName").value = "";
+    customZones = { a: [], b: [] };
+    renderCustomZoneChips("a");
+    renderCustomZoneChips("b");
+    $("customOpToggle").dataset.op = "+";
+    $("customOpToggle").textContent = "+";
+    updateAddCustomMetricButton();
+
+    renderCustomMetricChips();
+    updateDrawButtonState();
+  });
+
+  function renderCustomMetricChips() {
+    const box = $("customMetricChips");
+    box.innerHTML = "";
+    customIndicators.forEach((c) => {
+      const chip = document.createElement("div");
+      chip.className = "chip custom-chip" + (selectedCustomIds.has(c.id) ? " selected" : "");
+      chip.tabIndex = 0;
+      chip.innerHTML = `<span>${escapeHtml(c.label)}</span><button type="button" class="del-btn" aria-label="삭제">×</button>`;
+      const toggle = () => {
+        if (selectedCustomIds.has(c.id)) selectedCustomIds.delete(c.id);
+        else selectedCustomIds.add(c.id);
+        chip.classList.toggle("selected");
+        updateDrawButtonState();
+      };
+      chip.addEventListener("click", (e) => {
+        if (e.target.closest(".del-btn")) return;
+        toggle();
+      });
+      chip.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); }
+      });
+      chip.querySelector(".del-btn").addEventListener("click", (e) => {
+        e.stopPropagation();
+        customIndicators = customIndicators.filter((x) => x.id !== c.id);
+        selectedCustomIds.delete(c.id);
+        renderCustomMetricChips();
+        updateDrawButtonState();
+      });
+      box.appendChild(chip);
+    });
+  }
 
   function formatKR(v) {
     const abs = Math.abs(v);
