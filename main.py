@@ -35,6 +35,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+@app.middleware("http")
+async def _no_cache_html_js_css(request, call_next):
+    """정적 파일에 Cache-Control이 없으면 브라우저가 임의로(휴리스틱) 캐시해
+    배포 후에도 예전 페이지/스크립트를 계속 쓰는 문제가 생긴다. 매번 서버에
+    재검증(ETag/If-None-Match)하도록 강제해 배포 직후에도 최신 파일이 뜨게 한다."""
+    response = await call_next(request)
+    if request.url.path in ("/", "/index.html", "/app.js", "/style.css"):
+        response.headers["Cache-Control"] = "no-cache, must-revalidate"
+    return response
+
 _INDEX_LOCK = asyncio.Lock()      # 인덱스 DB 최초 생성 보호
 _ANALYZE_LOCK = asyncio.Lock()    # 워커 프로세스 동시 1개 제한(메모리 보호)
 _CACHE: dict[str, dict] = {}
