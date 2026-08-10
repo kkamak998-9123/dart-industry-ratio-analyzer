@@ -10,6 +10,7 @@
 import asyncio
 import json
 import os
+import sqlite3
 import sys
 import tempfile
 from pathlib import Path
@@ -22,7 +23,7 @@ from fastapi.staticfiles import StaticFiles
 import ratios
 
 BASE_DIR = Path(__file__).parent
-INDEX_PATH = BASE_DIR / "data" / "corp_index.json"
+DB_PATH = BASE_DIR / "data" / "corp_index.db"
 BUILD_SCRIPT = BASE_DIR / "build_index.py"
 WORKER_SCRIPT = BASE_DIR / "analyze_worker.py"
 
@@ -34,59 +35,57 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-_INDEX: list[dict] = []
-_INDEX_BY_CODE: dict[str, dict] = {}
-_INDEX_LOCK = asyncio.Lock()      # 인덱스 최초 생성/로드 보호
+_INDEX_LOCK = asyncio.Lock()      # 인덱스 DB 최초 생성 보호
 _ANALYZE_LOCK = asyncio.Lock()    # 워커 프로세스 동시 1개 제한(메모리 보호)
 _CACHE: dict[str, dict] = {}
 _JOBS: set[str] = set()
 
 
-def _load_index_file() -> bool:
-    if not INDEX_PATH.exists():
-        return False
-    with open(INDEX_PATH, encoding="utf-8") as f:
-        records = json.load(f)
-    _INDEX.clear()
-    _INDEX_BY_CODE.clear()
-    _INDEX.extend(records)
-    for r in records:
-        _INDEX_BY_CODE[r["corp_code"]] = r
-    return True
+def _query(sql: str, params: tuple = ()) -> list[sqlite3.Row]:
+    """SQLite 인덱스는 디스크에서 조회 → 부모 RAM에 전체 목록을 상주시키지 않는다."""
+    con = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True)
+    con.row_factory = sqlite3.Row
+    try:
+        return con.execute(sql, params).fetchall()
+    finally:
+        con.close()
 
 
 async def _ensure_index() -> None:
-    """corp_index.json을 메모리에 적재. 없으면 build_index.py를 별도 프로세스로 생성."""
-    if _INDEX:
+    """corp_index.db가 없으면 build_index.py를 별도 프로세스로 생성."""
+    if DB_PATH.exists():
         return
     async with _INDEX_LOCK:
-        if _INDEX:
+        if DB_PATH.exists():
             return
-        if not _load_index_file():
-            proc = await asyncio.create_subprocess_exec(
-                sys.executable, str(BUILD_SCRIPT), str(INDEX_PATH),
-                cwd=str(BASE_DIR),
-                stdout=asyncio.subprocess.DEVNULL,
-                stderr=asyncio.subprocess.PIPE,
+        proc = await asyncio.create_subprocess_exec(
+            sys.executable, str(BUILD_SCRIPT), str(DB_PATH),
+            cwd=str(BASE_DIR),
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        _, err = await proc.communicate()
+        if proc.returncode != 0 or not DB_PATH.exists():
+            raise HTTPException(
+                status_code=503,
+                detail="검색 인덱스 생성 실패: " + (err or b"").decode("utf-8", "replace")[-300:],
             )
-            _, err = await proc.communicate()
-            if proc.returncode != 0 or not _load_index_file():
-                raise HTTPException(
-                    status_code=503,
-                    detail="검색 인덱스 생성 실패: " + (err or b"").decode("utf-8", "replace")[-300:],
-                )
 
 
 @app.get("/api/search")
 async def search_companies(q: str = Query(..., min_length=1)):
     await _ensure_index()
-    q_norm = q.strip().lower()
-    matches = [
+    like = f"%{q.strip()}%"
+    # 상장사(stock_code 있음)를 먼저 보여주고, 그다음 이름순
+    rows = _query(
+        "SELECT corp_code, corp_name, stock_code FROM corps "
+        "WHERE corp_name LIKE ? ORDER BY (stock_code IS NULL), corp_name LIMIT 20",
+        (like,),
+    )
+    return {"matches": [
         {"corp_code": r["corp_code"], "corp_name": r["corp_name"], "stock_code": r["stock_code"]}
-        for r in _INDEX
-        if q_norm in r["corp_name"].lower()
-    ][:20]
-    return {"matches": matches}
+        for r in rows
+    ]}
 
 
 async def _run_worker(corp_code: str) -> dict:
@@ -150,9 +149,13 @@ async def get_company_analysis(corp_code: str):
             raise HTTPException(status_code=502, detail=payload["error"])
         return payload
 
-    record = _INDEX_BY_CODE.get(corp_code)
-    if record is None:
+    rows = _query(
+        "SELECT corp_code, corp_name, stock_code, 대분류, 세부업종 FROM corps WHERE corp_code=?",
+        (corp_code,),
+    )
+    if not rows:
         raise HTTPException(status_code=404, detail="회사를 찾을 수 없습니다.")
+    record = dict(rows[0])
 
     if corp_code not in _JOBS:
         _JOBS.add(corp_code)
