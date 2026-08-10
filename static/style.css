@@ -186,29 +186,33 @@ h1 { font-size: 24px; font-weight: 700; margin: 0; letter-spacing: -0.01em; colo
 /* ---- 나만의 지표(계정 합산) ---- */
 .custom-metric-builder { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
 .custom-metric-builder > input.search-box { width: 100%; }
-.custom-metric-slots { display: flex; align-items: stretch; gap: 8px; }
-.custom-metric-slots .drop-zone.multi {
-  flex-direction: column; align-items: stretch; justify-content: flex-start;
-  min-height: 64px; gap: 6px; padding: 8px 10px;
-}
-.custom-metric-slots .drop-zone.multi .dz-label { margin-bottom: 0; text-align: left; }
-.dz-chips { display: flex; flex-wrap: wrap; gap: 6px; min-height: 22px; }
-.dz-chip {
-  display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; font-weight: 600;
-  padding: 4px 6px 4px 10px; background: var(--accent-soft); color: var(--accent-strong); border-radius: 14px;
-}
-.dz-chip button {
-  border: none; background: none; color: inherit; cursor: pointer; font-size: 13px; line-height: 1;
-  padding: 2px; opacity: 0.65;
-}
-.dz-chip button:hover { opacity: 1; }
+
+.custom-terms-list { display: flex; flex-direction: column; gap: 8px; }
+.term-row { display: flex; align-items: center; gap: 8px; }
+.term-row .drop-zone { flex: 1; min-height: 40px; }
+
 .op-toggle {
-  flex-shrink: 0; align-self: center; width: 34px; height: 34px; border-radius: 50%;
+  flex-shrink: 0; width: 34px; height: 34px; border-radius: 50%;
   border: 1.5px solid var(--border); background: var(--surface); color: var(--good);
   font-size: 17px; font-weight: 700; cursor: pointer; transition: border-color .12s ease, color .12s ease;
 }
 .op-toggle:hover { border-color: var(--accent); }
 .op-toggle[data-op="-"] { color: var(--bad); }
+
+.term-chip {
+  display: inline-block; font-size: 12.5px; font-weight: 600; padding: 4px 10px;
+  background: var(--accent-soft); color: var(--accent-strong); border-radius: 14px;
+}
+.term-remove {
+  flex-shrink: 0; width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--border);
+  background: var(--surface); color: var(--text-faint); cursor: pointer; font-size: 14px; line-height: 1;
+  transition: border-color .12s ease, color .12s ease;
+}
+.term-remove:hover { border-color: var(--bad); color: var(--bad); }
+
+.add-term-btn { align-self: flex-start; }
+.add-term-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
 .custom-account-pool { margin-top: 4px; }
 .custom-account-pool h4 { font-size: 12px; color: var(--text-dim); margin: 0 0 8px; }
 .chip.custom-chip { display: inline-flex; align-items: center; gap: 6px; }

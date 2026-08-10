@@ -68,20 +68,11 @@
       <div class="panel custom-metric-panel">
         <div class="panel-head"><span class="panel-title">나만의 지표 만들기 (계정 합산)</span></div>
         <div class="panel-body">
-          <p class="hint">원하는 계정과목이 없다면 직접 만드세요. 이름을 정하고 아래 계정과목을 A·B 칸에 드래그하면, 연산자에 따라 값을 합산해서 새 지표를 만듭니다. (예: 세전이익 = 당기순이익 <strong>+</strong> 법인세비용)</p>
+          <p class="hint">원하는 계정과목이 없다면 직접 만드세요. 이름을 정하고 아래 계정과목을 드래그하면, 각 항목의 +/- 에 따라 값을 합산해서 새 지표를 만듭니다. "+ 항목 추가"로 최대 10개까지 늘릴 수 있어요. (예: 세전이익 = 당기순이익 <strong>+</strong> 법인세비용)</p>
           <div class="custom-metric-builder">
             <input id="customMetricName" class="search-box" type="text" placeholder="지표 이름 (예: 세전이익)">
-            <div class="custom-metric-slots">
-              <div class="drop-zone multi" id="customZoneA" data-side="a">
-                <span class="dz-label">항목 A</span>
-                <div class="dz-chips"></div>
-              </div>
-              <button type="button" id="customOpToggle" class="op-toggle" data-op="+" title="연산자 전환 (+/-)">+</button>
-              <div class="drop-zone multi" id="customZoneB" data-side="b">
-                <span class="dz-label">항목 B</span>
-                <div class="dz-chips"></div>
-              </div>
-            </div>
+            <div id="customTermsList" class="custom-terms-list"></div>
+            <button type="button" id="addTermBtn" class="btn-ghost add-term-btn">+ 항목 추가</button>
             <button id="addCustomMetricBtn" type="button" class="btn-primary" disabled>지표 추가</button>
           </div>
           <div class="custom-account-pool">

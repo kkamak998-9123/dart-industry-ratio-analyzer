@@ -7,9 +7,10 @@
   let selectedStmt = "is";
   let selectedItems = { is: new Set(), bs: new Set(), cf: new Set() };
   let ratioMapping = {};
+  const MAX_CUSTOM_TERMS = 10;
   let customIndicators = []; // 사용자가 만든 지표: {id, label, values}
   let selectedCustomIds = new Set();
-  let customZones = { a: [], b: [] }; // 지표 빌더에 드래그된 항목: {label, source, values}
+  let customTerms = [{ sign: 1, item: null }, { sign: 1, item: null }]; // 지표 빌더의 각 줄: {sign: 1|-1, item: {label, source, values}|null}
 
   const $ = (id) => document.getElementById(id);
 
@@ -183,7 +184,7 @@
     ratioMapping = {};
     customIndicators = [];
     selectedCustomIds = new Set();
-    customZones = { a: [], b: [] };
+    customTerms = [{ sign: 1, item: null }, { sign: 1, item: null }];
 
     selectedStmt = "is";
     document.querySelectorAll(".sub-tab-btn").forEach((b) => b.classList.toggle("active", b.dataset.stmt === "is"));
@@ -192,12 +193,9 @@
     updateDrawButtonState();
 
     renderCustomAccountPool();
-    renderCustomZoneChips("a");
-    renderCustomZoneChips("b");
+    renderCustomTerms();
     renderCustomMetricChips();
     $("customMetricName").value = "";
-    $("customOpToggle").dataset.op = "+";
-    $("customOpToggle").textContent = "+";
     updateAddCustomMetricButton();
 
     renderRatioCards();
@@ -308,86 +306,106 @@
     if (!any) box.innerHTML = '<p class="hint">데이터가 없습니다.</p>';
   }
 
-  function renderCustomZoneChips(side) {
-    const zoneEl = $(side === "a" ? "customZoneA" : "customZoneB");
-    const box = zoneEl.querySelector(".dz-chips");
+  function renderCustomTerms() {
+    const box = $("customTermsList");
     box.innerHTML = "";
-    customZones[side].forEach((item, idx) => {
-      const chip = document.createElement("span");
-      chip.className = "dz-chip";
-      chip.innerHTML = `<span>${escapeHtml(item.label)}</span><button type="button" aria-label="제거">×</button>`;
-      chip.querySelector("button").addEventListener("click", () => {
-        customZones[side].splice(idx, 1);
-        renderCustomZoneChips(side);
+
+    customTerms.forEach((term, idx) => {
+      const row = document.createElement("div");
+      row.className = "term-row";
+
+      const opBtn = document.createElement("button");
+      opBtn.type = "button";
+      opBtn.className = "op-toggle";
+      opBtn.dataset.op = term.sign === -1 ? "-" : "+";
+      opBtn.textContent = term.sign === -1 ? "-" : "+";
+      opBtn.title = "연산자 전환 (+/-)";
+      opBtn.addEventListener("click", () => {
+        term.sign = term.sign === -1 ? 1 : -1;
+        renderCustomTerms();
+      });
+      row.appendChild(opBtn);
+
+      const zone = document.createElement("div");
+      zone.className = "drop-zone";
+      if (term.item) {
+        zone.classList.add("filled");
+        zone.innerHTML = `<span class="term-chip">${escapeHtml(term.item.label)}</span>`;
+      } else {
+        zone.textContent = "여기로 계정과목을 드래그";
+      }
+      zone.addEventListener("dragover", (e) => { e.preventDefault(); zone.classList.add("dragover"); });
+      zone.addEventListener("dragleave", () => zone.classList.remove("dragover"));
+      zone.addEventListener("drop", (e) => {
+        e.preventDefault();
+        zone.classList.remove("dragover");
+        let data;
+        try {
+          data = JSON.parse(e.dataTransfer.getData("text/plain"));
+        } catch {
+          return;
+        }
+        if (!data || !data.label || !data.values) return;
+        term.item = data;
+        renderCustomTerms();
         updateAddCustomMetricButton();
       });
-      box.appendChild(chip);
+      row.appendChild(zone);
+
+      const delBtn = document.createElement("button");
+      delBtn.type = "button";
+      delBtn.className = "term-remove";
+      delBtn.setAttribute("aria-label", "항목 삭제");
+      delBtn.textContent = "×";
+      delBtn.addEventListener("click", () => {
+        customTerms.splice(idx, 1);
+        renderCustomTerms();
+        updateAddCustomMetricButton();
+      });
+      row.appendChild(delBtn);
+
+      box.appendChild(row);
     });
+
+    const addBtn = $("addTermBtn");
+    addBtn.disabled = customTerms.length >= MAX_CUSTOM_TERMS;
+    addBtn.textContent = customTerms.length >= MAX_CUSTOM_TERMS ? `최대 ${MAX_CUSTOM_TERMS}개까지 추가할 수 있어요` : "+ 항목 추가";
   }
+
+  $("addTermBtn").addEventListener("click", () => {
+    if (customTerms.length >= MAX_CUSTOM_TERMS) return;
+    customTerms.push({ sign: 1, item: null });
+    renderCustomTerms();
+    updateAddCustomMetricButton();
+  });
 
   function updateAddCustomMetricButton() {
     const hasName = $("customMetricName").value.trim().length > 0;
-    const hasItems = customZones.a.length > 0 || customZones.b.length > 0;
+    const hasItems = customTerms.some((t) => t.item);
     $("addCustomMetricBtn").disabled = !(hasName && hasItems);
   }
 
   $("customMetricName").addEventListener("input", updateAddCustomMetricButton);
 
-  ["customZoneA", "customZoneB"].forEach((id) => {
-    const zone = $(id);
-    const side = zone.dataset.side;
-    zone.addEventListener("dragover", (e) => { e.preventDefault(); zone.classList.add("dragover"); });
-    zone.addEventListener("dragleave", () => zone.classList.remove("dragover"));
-    zone.addEventListener("drop", (e) => {
-      e.preventDefault();
-      zone.classList.remove("dragover");
-      let data;
-      try {
-        data = JSON.parse(e.dataTransfer.getData("text/plain"));
-      } catch {
-        return;
-      }
-      if (!data || !data.label || !data.values) return;
-      const dup = customZones[side].some((it) => it.label === data.label && it.source === data.source);
-      if (!dup) {
-        customZones[side].push(data);
-        renderCustomZoneChips(side);
-        updateAddCustomMetricButton();
-      }
-    });
-  });
-
-  $("customOpToggle").addEventListener("click", () => {
-    const btn = $("customOpToggle");
-    const next = btn.dataset.op === "+" ? "-" : "+";
-    btn.dataset.op = next;
-    btn.textContent = next;
-  });
-
   $("addCustomMetricBtn").addEventListener("click", () => {
     const name = $("customMetricName").value.trim();
     if (!name) return;
-    const op = $("customOpToggle").dataset.op === "-" ? -1 : 1;
+    const filled = customTerms.filter((t) => t.item);
+    if (!filled.length) return;
 
     const yearsSet = new Set();
-    [...customZones.a, ...customZones.b].forEach((item) => Object.keys(item.values).forEach((y) => yearsSet.add(y)));
+    filled.forEach((t) => Object.keys(t.item.values).forEach((y) => yearsSet.add(y)));
 
     const values = {};
     [...yearsSet].forEach((year) => {
       let ok = true;
-      let sumA = 0;
-      customZones.a.forEach((item) => {
-        const v = item.values[year];
+      let sum = 0;
+      filled.forEach((t) => {
+        const v = t.item.values[year];
         if (v === undefined) { ok = false; return; }
-        sumA += v;
+        sum += t.sign * v;
       });
-      let sumB = 0;
-      customZones.b.forEach((item) => {
-        const v = item.values[year];
-        if (v === undefined) { ok = false; return; }
-        sumB += v;
-      });
-      if (ok) values[year] = sumA + op * sumB;
+      if (ok) values[year] = sum;
     });
 
     if (!Object.keys(values).length) {
@@ -400,11 +418,8 @@
     selectedCustomIds.add(id);
 
     $("customMetricName").value = "";
-    customZones = { a: [], b: [] };
-    renderCustomZoneChips("a");
-    renderCustomZoneChips("b");
-    $("customOpToggle").dataset.op = "+";
-    $("customOpToggle").textContent = "+";
+    customTerms = [{ sign: 1, item: null }, { sign: 1, item: null }];
+    renderCustomTerms();
     updateAddCustomMetricButton();
 
     renderCustomMetricChips();
