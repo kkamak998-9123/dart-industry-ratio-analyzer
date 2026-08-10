@@ -10,6 +10,74 @@
 
   const $ = (id) => document.getElementById(id);
 
+  // ---------------- 인쇄 / 이미지 저장 ----------------
+
+  document.addEventListener("click", (e) => {
+    const printBtn = e.target.closest("[data-print]");
+    if (printBtn) {
+      window.print();
+      return;
+    }
+    const saveBtn = e.target.closest("[data-save-img]");
+    if (saveBtn) {
+      const container = $(saveBtn.dataset.saveImg);
+      const svg = container && container.querySelector("svg");
+      if (svg) saveSvgAsPng(svg, saveBtn.dataset.filename || "chart");
+    }
+  });
+
+  function saveSvgAsPng(svgEl, filenameBase) {
+    const clone = svgEl.cloneNode(true);
+    clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+
+    // var(--token) 참조는 별도 문서 컨텍스트(Image)에서 해석되지 않으므로
+    // 현재 테마의 실제 색상 값으로 치환해 저장한다.
+    const cs = getComputedStyle(document.documentElement);
+    const tokens = ["--text", "--text-dim", "--text-faint", "--border", "--surface"];
+    const resolved = {};
+    tokens.forEach((t) => { resolved[t] = cs.getPropertyValue(t).trim(); });
+    ["fill", "stroke"].forEach((attr) => {
+      clone.querySelectorAll(`[${attr}]`).forEach((el) => {
+        const v = el.getAttribute(attr);
+        const m = v && v.match(/^var\((--[a-z-]+)\)$/);
+        if (m && resolved[m[1]]) el.setAttribute(attr, resolved[m[1]]);
+      });
+    });
+
+    const bg = resolved["--surface"] || "#ffffff";
+    const { width, height } = svgEl.getBoundingClientRect();
+    const w = Math.max(Math.round(width), 1);
+    const h = Math.max(Math.round(height), 1);
+    clone.setAttribute("width", w);
+    clone.setAttribute("height", h);
+
+    const svgStr = new XMLSerializer().serializeToString(clone);
+    const svgBlob = new Blob([svgStr], { type: "image/svg+xml;charset=utf-8" });
+    const url = URL.createObjectURL(svgBlob);
+
+    const img = new Image();
+    img.onload = () => {
+      const scale = 2; // 저장 화질(레티나 대응)
+      const canvas = document.createElement("canvas");
+      canvas.width = w * scale;
+      canvas.height = h * scale;
+      const ctx = canvas.getContext("2d");
+      ctx.scale(scale, scale);
+      ctx.fillStyle = bg;
+      ctx.fillRect(0, 0, w, h);
+      ctx.drawImage(img, 0, 0, w, h);
+      URL.revokeObjectURL(url);
+      canvas.toBlob((blob) => {
+        const a = document.createElement("a");
+        const stamp = new Date().toISOString().slice(0, 10);
+        a.href = URL.createObjectURL(blob);
+        a.download = `${filenameBase}_${(currentData && currentData.corp_name) || ""}_${stamp}.png`;
+        a.click();
+      });
+    };
+    img.src = url;
+  }
+
   function escapeHtml(str) {
     const div = document.createElement("div");
     div.textContent = str == null ? "" : String(str);

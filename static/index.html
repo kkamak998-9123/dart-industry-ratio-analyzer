@@ -17,6 +17,8 @@
     </div>
   </header>
 
+  <p class="notice">⏱️ 서버가 쉬고 있었다면 첫 접속에 최대 1분, 재무제표 조회는 회사에 따라 1~3분 정도 걸릴 수 있어요. 조금만 기다려주세요.</p>
+
   <section class="panel search-panel">
     <div class="panel-head">
       <span class="panel-title">회사 검색</span>
@@ -63,7 +65,13 @@
         </div>
       </div>
       <div id="indicatorChartPanel" class="panel chart-panel" hidden>
-        <div class="panel-head"><span class="panel-title">지표 추이</span></div>
+        <div class="panel-head">
+          <span class="panel-title">지표 추이</span>
+          <div class="panel-actions">
+            <button type="button" class="btn-ghost" data-print>🖨 인쇄</button>
+            <button type="button" class="btn-ghost" data-save-img="indicatorChart" data-filename="지표추이">💾 이미지 저장</button>
+          </div>
+        </div>
         <div id="indicatorChart" class="chart-body"></div>
       </div>
     </section>
@@ -92,7 +100,13 @@
         </div>
       </div>
       <div id="ratioChartPanel" class="panel chart-panel" hidden>
-        <div class="panel-head"><span class="panel-title">비율 추이</span></div>
+        <div class="panel-head">
+          <span class="panel-title">비율 추이</span>
+          <div class="panel-actions">
+            <button type="button" class="btn-ghost" data-print>🖨 인쇄</button>
+            <button type="button" class="btn-ghost" data-save-img="ratioChart" data-filename="재무비율추이">💾 이미지 저장</button>
+          </div>
+        </div>
         <div id="ratioChart" class="chart-body"></div>
         <div id="ratioTable" class="panel-body"></div>
       </div>
